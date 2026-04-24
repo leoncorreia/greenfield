@@ -112,7 +112,7 @@ Deploy steps:
 3. **`PUBLIC_BASE_URL`** is optional: on Render the server defaults to **`RENDER_EXTERNAL_URL`** when `PUBLIC_BASE_URL` is unset, so mock discovery can call the same host without extra configuration.
 4. **Other integrations** are not part of the Blueprint file on purpose (so you are not prompted for dozens of keys). Add them in the Web Service → **Environment** when you need them — see [Optional integrations on Render](#optional-integrations-on-render) below.
 
-**Build / start** (from repo root, per `render.yaml`): `npm ci`, build **server + web**, then `npm run start -w apps/server`. **`STATIC_WEB_ROOT=apps/web/dist`** serves the demo UI from the same URL as the API. Health checks use `GET /health`.
+**Build / start** (from repo root, per `render.yaml`): the Blueprint runs **`NPM_CONFIG_PRODUCTION=false NODE_ENV=development npm ci`** so **devDependencies (e.g. Vite) are installed** even though the service sets `NODE_ENV=production` for runtime; then it builds **server + web**. **`STATIC_WEB_ROOT=apps/web/dist`** serves the demo UI from the same URL as the API. Health checks use `GET /health`.
 
 ### Optional integrations on Render
 

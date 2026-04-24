@@ -18,7 +18,8 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    buildCommand: npm ci && npm run build -w apps/server && npm run build -w apps/web
+    # Service env sets NODE_ENV=production, which makes npm ci omit devDependencies — vite must be installed to build the UI.
+    buildCommand: NPM_CONFIG_PRODUCTION=false NODE_ENV=development npm ci && npm run build -w apps/server && npm run build -w apps/web
     startCommand: npm run start -w apps/server
     healthCheckPath: /health
     envVars:
