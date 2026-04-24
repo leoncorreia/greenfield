@@ -95,9 +95,24 @@ Deploy steps:
 1. Push this repository to GitHub.
 2. In the [Render Dashboard](https://dashboard.render.com/), choose **New** → **Blueprint**, connect the repo, and select `render.yaml`.
 3. **`PUBLIC_BASE_URL`** is optional: on Render the server defaults to **`RENDER_EXTERNAL_URL`** when `PUBLIC_BASE_URL` is unset, so mock discovery can call the same host without extra configuration.
-4. Optional secrets from the Blueprint (`sync: false`): `OPENAI_*`, `AWS_*`, payment endpoints, or set `PUBLIC_BASE_URL` explicitly if you use a custom domain.
+4. **Other integrations** are not part of the Blueprint file on purpose (so you are not prompted for dozens of keys). Add them in the Web Service → **Environment** when you need them — see [Optional integrations on Render](#optional-integrations-on-render) below.
 
 **Build / start** (from repo root, per `render.yaml`): `npm ci && npm run build -w apps/server` then `npm run start -w apps/server`. Health checks use `GET /health`.
+
+### Optional integrations on Render
+
+The Blueprint screen only reflects what is **in `render.yaml`** (Key Value + API defaults). The product still supports the full sponsor-style surface from [`.env.example`](./.env.example); configure these manually on the web service when you turn a feature on:
+
+| Area | Role | Environment variables |
+|------|------|-------------------------|
+| **Open web discovery** (“Tinyfish-style” pipeline in code: fetch, robots.txt, rate limits — not a separate vendor SDK) | Optional public sourcing | `WEB_DISCOVERY_ENABLED=true`, `WEB_DISCOVERY_SEED_URLS`, `WEB_DISCOVERY_MAX_PAGES`, `WEB_DISCOVERY_RATE_MS` |
+| **LLM ranking** | OpenAI-compatible or Bedrock | `LLM_PROVIDER` (`openai` \| `bedrock`), `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `AWS_REGION`, `AWS_BEDROCK_MODEL_ID`, plus AWS credentials for Bedrock |
+| **Nexla** | Optional payload normalization | `NEXLA_API_KEY`, `NEXLA_BASE_URL` |
+| **Ghost** | Optional research artifacts | `GHOST_ADMIN_API_KEY`, `GHOST_CONTENT_API_URL` |
+| **TigerData** | Optional SQL persistence | `TIGERDATA_DATABASE_URL` |
+| **Payment rails** | Stub HTTP POSTs | `X402_ENDPOINT`, `CDP_ENDPOINT`, `MPP_ENDPOINT`, `AGENTIC_MARKET_ENDPOINT` |
+
+With **`LLM_PROVIDER=none`** (the Blueprint default), you do **not** need OpenAI or Bedrock keys for ranking; the server uses the built-in heuristic.
 
 **Note:** Key Value uses the **starter** plan in the Blueprint (Render Key Value does not use the web “free” tier). The API web service remains on the **free** plan unless you change it in `render.yaml`.
 

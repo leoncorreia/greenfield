@@ -1,6 +1,9 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 # Provisions Redis-compatible Key Value and wires REDIS_URL automatically.
-# After apply: open the Web Service URL (or rely on RENDER_EXTERNAL_URL for PUBLIC_BASE_URL).
+# PUBLIC_BASE_URL: omit in Render; server uses RENDER_EXTERNAL_URL when unset.
+#
+# Optional integrations (Nexla, Ghost, TigerData, payment stubs, web discovery, LLM)
+# are not listed here — add them in the Render dashboard when you need them (see README).
 
 services:
   - type: keyvalue
@@ -28,11 +31,3 @@ services:
           name: greenfield-keyvalue
           type: keyvalue
           property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_BASE_URL
-        sync: false
-      - key: AWS_REGION
-        sync: false
-      - key: AWS_BEDROCK_MODEL_ID
-        sync: false
