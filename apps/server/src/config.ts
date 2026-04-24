@@ -7,6 +7,8 @@ const envSchema = z.object({
   REDIS_URL: z.string().default("redis://127.0.0.1:6379"),
   PUBLIC_BASE_URL: z.string().url().default("http://127.0.0.1:8080"),
   CITED_MD_PATH: z.string().default("./cited.md"),
+  /** If set and the directory exists (e.g. `apps/web/dist`), the API also serves the Vite SPA for one-URL demos. */
+  STATIC_WEB_ROOT: z.string().optional(),
   AUTO_START_RUN: z
     .string()
     .optional()
@@ -20,10 +22,14 @@ const envSchema = z.object({
   WEB_DISCOVERY_RATE_MS: z.coerce.number().min(0).default(750),
   WEB_DISCOVERY_SEED_URLS: z.string().optional(),
 
-  LLM_PROVIDER: z.enum(["none", "openai", "bedrock"]).default("none"),
+  LLM_PROVIDER: z.enum(["none", "openai", "bedrock", "gmi"]).default("none"),
   OPENAI_BASE_URL: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  /** GMI Cloud Inference Engine (OpenAI-compatible). See https://docs.gmicloud.ai/inference-engine/api-reference/llm-api-reference */
+  GMI_API_KEY: z.string().optional(),
+  GMI_BASE_URL: z.string().url().optional(),
+  GMI_MODEL: z.string().optional(),
   AWS_REGION: z.string().optional(),
   AWS_BEDROCK_MODEL_ID: z.string().optional(),
 

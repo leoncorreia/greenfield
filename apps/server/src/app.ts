@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import type { Config } from "./config.js";
@@ -28,6 +30,21 @@ export function createApp(config: Config, log: Logger, redis: RedisClient, orche
   app.use("/runs", createRunsRouter(config, log, redis, orchestratorDeps));
   app.use("/reports", createReportsRouter(config, log));
   app.use("/payments", createPaymentsRouter(config, log, redis));
+
+  const staticRoot = config.STATIC_WEB_ROOT?.trim()
+    ? path.resolve(process.cwd(), config.STATIC_WEB_ROOT.trim())
+    : undefined;
+  if (staticRoot && existsSync(staticRoot)) {
+    log.info("static_web_enabled", { staticRoot });
+    app.use(express.static(staticRoot, { index: ["index.html"] }));
+    app.get("/*", (req, res, next) => {
+      if (req.method !== "GET") return next();
+      const indexHtml = path.join(staticRoot, "index.html");
+      if (!existsSync(indexHtml)) return next();
+      res.sendFile(indexHtml);
+    });
+  }
+
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     log.error("unhandled_error", { err: String(err) });
     res.status(500).json({ error: "internal_error" });

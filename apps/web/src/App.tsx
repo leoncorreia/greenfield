@@ -1,11 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, "") ?? "";
 
-function api(path: string, init?: RequestInit) {
-  const url = API_ORIGIN ? `${API_ORIGIN}${path}` : `/api${path}`;
-  return fetch(url, init);
+/** Vite dev: proxy `/api` → API. Production on same host as API: call paths at repo root. */
+function apiUrl(path: string): string {
+  if (API_ORIGIN) return `${API_ORIGIN}${path}`;
+  if (import.meta.env.DEV) return `/api${path}`;
+  return path;
 }
+
+function api(path: string, init?: RequestInit) {
+  return fetch(apiUrl(path), init);
+}
+
+const PIPELINE_STEPS = [
+  "DEMAND_RECEIVED",
+  "SOURCING",
+  "SHORTLISTED",
+  "NEGOTIATING",
+  "SELECTED",
+  "PAYMENT_SUBMITTED",
+  "FULFILLMENT_TRACKING",
+  "COMPLETED",
+] as const;
 
 type Run = {
   id: string;
@@ -37,10 +54,17 @@ export function App() {
   const [run, setRun] = useState<Run | null>(null);
   const [cited, setCited] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sku, setSku] = useState("WIDGET-100");
   const [units, setUnits] = useState("100");
   const [maxPrice, setMaxPrice] = useState("12.5");
   const [deliveryBy, setDeliveryBy] = useState("2026-05-01");
+
+  const modeLabel = useMemo(() => {
+    if (API_ORIGIN) return `Remote API (${API_ORIGIN})`;
+    if (import.meta.env.DEV) return "Local dev (Vite → /api → server)";
+    return "Same origin (UI served by API)";
+  }, []);
 
   const refreshRun = useCallback(async (id: string) => {
     const r = await api(`/runs/${id}`);
@@ -58,8 +82,8 @@ export function App() {
   useEffect(() => {
     void api("/health")
       .then((r) => r.json())
-      .then((j) => setHealth(JSON.stringify(j)))
-      .catch(() => setHealth("unreachable"));
+      .then((j) => setHealth(JSON.stringify(j, null, 2)))
+      .catch(() => setHealth("unreachable — start the API and Redis"));
     void refreshCited();
   }, [refreshCited]);
 
@@ -69,7 +93,15 @@ export function App() {
     return () => clearInterval(t);
   }, [run?.id, refreshRun]);
 
+  const stepIndex =
+    run != null
+      ? PIPELINE_STEPS.indexOf(run.state as (typeof PIPELINE_STEPS)[number])
+      : -1;
+  const escalated = run?.state === "ESCALATED";
+  const completed = run?.state === "COMPLETED";
+
   async function createDemand() {
+    setError(null);
     setBusy(true);
     try {
       const r = await api("/demand", {
@@ -82,9 +114,15 @@ export function App() {
           deliveryBy,
         }),
       });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || r.statusText);
+      }
       const j = (await r.json()) as { run: Run };
       setRun(j.run);
       await refreshCited();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -92,11 +130,18 @@ export function App() {
 
   async function startRun() {
     if (!run) return;
+    setError(null);
     setBusy(true);
     try {
-      await api(`/runs/${run.id}/start`, { method: "POST" });
+      const r = await api(`/runs/${run.id}/start`, { method: "POST" });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string; state?: string };
+        throw new Error(j.error ?? r.statusText);
+      }
       await refreshRun(run.id);
       await refreshCited();
+    } catch (e) {
+      setError(String(e));
     } finally {
       setBusy(false);
     }
@@ -104,23 +149,35 @@ export function App() {
 
   return (
     <main>
-      <h1>Vendor Ops — pipeline</h1>
-      <p>
-        <span className="sim">SIMULATION</span> Mock vendors and discovery path are not real marketplaces or unsolicited
-        outreach.
-        {API_ORIGIN ? (
-          <>
-            {" "}
-            API: <code>{API_ORIGIN}</code>
-          </>
-        ) : null}
-      </p>
+      <header className="hero">
+        <h1>Vendor Ops — demo UI</h1>
+        <p className="hero-sub">
+          <span className="sim">SIMULATION</span> In-repo mock vendors; negotiation and payments are not live. Open web
+          discovery is optional and bounded by config.
+        </p>
+        <p className="kbd-line">
+          <strong>How to demo (local):</strong> <kbd>docker compose up -d redis</kbd> → <kbd>cp .env.example .env</kbd> →{" "}
+          <kbd>npm install</kbd> → <kbd>npm run dev</kbd> → open <kbd>http://127.0.0.1:5173</kbd> (UI + API proxy).
+        </p>
+        <p className="muted">
+          Mode: {modeLabel}. API paths: <code>{import.meta.env.DEV ? "/api/*" : "/*"}</code>
+        </p>
+      </header>
+
+      {error && (
+        <div className="card err" role="alert">
+          <strong>Error</strong>
+          <pre>{error}</pre>
+        </div>
+      )}
+
       <div className="card">
         <strong>Health</strong>
         <pre>{health}</pre>
       </div>
+
       <div className="card">
-        <h2>Create demand</h2>
+        <h2>1 · Create demand</h2>
         <label>SKU</label>
         <input value={sku} onChange={(e) => setSku(e.target.value)} />
         <label>Units</label>
@@ -130,31 +187,66 @@ export function App() {
         <label>Delivery by</label>
         <input value={deliveryBy} onChange={(e) => setDeliveryBy(e.target.value)} />
         <button type="button" disabled={busy} onClick={() => void createDemand()}>
-          POST /demand
+          Create demand
         </button>
       </div>
+
       {run && (
         <div className="card">
-          <h2>Run {run.id}</h2>
+          <h2>2 · Run pipeline</h2>
           <p>
-            State: <strong>{run.state}</strong> · Correlation: <code>{run.correlationId}</code>
+            Run <code>{run.id}</code> · correlation <code>{run.correlationId}</code>
           </p>
+
+          <div className="pipeline" aria-label="Run state">
+            {PIPELINE_STEPS.map((step, i) => {
+              const done = !escalated && (stepIndex > i || (completed && i === stepIndex));
+              const current = !escalated && !completed && stepIndex === i;
+              const cls = ["step", done ? "done" : "", current ? "current" : escalated ? "dim" : ""]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <div key={step} className={cls} title={step}>
+                  <span className="step-idx">{done && !current ? "✓" : i + 1}</span>
+                  <span className="step-name">{step.replace(/_/g, " ")}</span>
+                </div>
+              );
+            })}
+            {escalated && (
+              <div className="step final escalated">
+                <span className="step-name">ESCALATED</span>
+              </div>
+            )}
+          </div>
+
+          {run.state === "SOURCING" && (
+            <p className="pulse">
+              <strong>Sourcing…</strong> polling every 1.5s (async worker).
+            </p>
+          )}
+
           <button type="button" disabled={busy || run.state !== "DEMAND_RECEIVED"} onClick={() => void startRun()}>
-            POST /runs/:id/start
+            Start run (sourcing + ranking)
           </button>
+
           <h3>Candidates</h3>
-          <ul>
-            {run.artifacts.candidates.map((c) => (
-              <li key={c.sourceUrl}>
-                {c.vendorName} — ${c.pricePerUnit}/u, MOQ {c.moq}, {c.leadTimeDays}d ·{" "}
-                <a href={c.sourceUrl} target="_blank" rel="noreferrer">
-                  source
-                </a>{" "}
-                {c.simulation !== false ? <span className="sim">SIMULATION</span> : null}
-              </li>
-            ))}
-          </ul>
-          {run.artifacts.lastSourcingNote && <pre>{run.artifacts.lastSourcingNote}</pre>}
+          {run.artifacts.candidates.length === 0 && run.state !== "DEMAND_RECEIVED" ? (
+            <p className="muted">No candidates yet…</p>
+          ) : (
+            <ul className="cand-list">
+              {run.artifacts.candidates.map((c) => (
+                <li key={c.sourceUrl}>
+                  <strong>{c.vendorName}</strong> — ${c.pricePerUnit}/u, MOQ {c.moq}, {c.leadTimeDays}d ·{" "}
+                  <a href={c.sourceUrl} target="_blank" rel="noreferrer">
+                    source
+                  </a>{" "}
+                  {c.simulation !== false ? <span className="sim">SIMULATION</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+          {run.artifacts.lastSourcingNote && <pre className="note">{run.artifacts.lastSourcingNote}</pre>}
+
           {run.artifacts.ranking && (
             <>
               <h3>Ranking ({run.artifacts.ranking.provider})</h3>
@@ -169,9 +261,11 @@ export function App() {
           )}
         </div>
       )}
+
       <div className="card">
-        <h2>cited.md (via GET /reports/latest)</h2>
-        <pre>{cited || "…"}</pre>
+        <h2>3 · Audit trail</h2>
+        <p className="muted">From <code>GET /reports/latest</code> (same content as cited.md on the server).</p>
+        <pre className="cited-block">{cited || "…"}</pre>
       </div>
     </main>
   );

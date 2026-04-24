@@ -18,12 +18,14 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    buildCommand: npm ci && npm run build -w apps/server
+    buildCommand: npm ci && npm run build -w apps/server && npm run build -w apps/web
     startCommand: npm run start -w apps/server
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: STATIC_WEB_ROOT
+        value: apps/web/dist
       - key: LLM_PROVIDER
         value: none
       - key: REDIS_URL

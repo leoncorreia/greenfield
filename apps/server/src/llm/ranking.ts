@@ -3,7 +3,7 @@ import type { Logger } from "../logger.js";
 import type { DemandRecord } from "../models/demand.js";
 import type { NormalizedOffer, VendorRankingArtifact } from "../models/run.js";
 import { parseVendorRankingOutput, type VendorRankingOutput } from "./ranking-schema.js";
-import { callOpenAiRanking } from "./openai-ranking.js";
+import { callChatCompletionsRanking, resolveGmiRankingParams, resolveOpenAiRankingParams } from "./openai-ranking.js";
 import { callBedrockRanking } from "./bedrock-ranking.js";
 
 function extractJsonValue(text: string): unknown {
@@ -119,18 +119,40 @@ export async function rankVendorOffers(
   const prompt = rankingPrompt(demand, offers);
 
   if (config.LLM_PROVIDER === "openai") {
-    if (!config.OPENAI_API_KEY) {
+    const p = resolveOpenAiRankingParams(config);
+    if (!p) {
       log.warn("ranking_openai_missing_key_fallback", { correlationId });
       return toArtifact("none", rankOffersHeuristic(demand, offers), offers);
     }
     try {
-      const rawText = await callOpenAiRanking(config, log, correlationId, prompt);
+      const rawText = await callChatCompletionsRanking(log, correlationId, p, prompt);
       const json = extractJsonValue(rawText);
       const parsed = sanitizeRankingToCandidates(parseVendorRankingOutput(json), offers);
       log.info("ranking_openai_ok", { correlationId });
       return toArtifact("openai", parsed, offers);
     } catch (e) {
       log.error("ranking_openai_failed", { correlationId, err: String(e) });
+      return toArtifact("none", rankOffersHeuristic(demand, offers), offers);
+    }
+  }
+
+  if (config.LLM_PROVIDER === "gmi") {
+    const p = resolveGmiRankingParams(config);
+    if (!p) {
+      log.warn("ranking_gmi_missing_config_fallback", {
+        correlationId,
+        hint: "Set GMI_API_KEY and GMI_MODEL (or OPENAI_MODEL to a GMI model id). Optional: GMI_BASE_URL.",
+      });
+      return toArtifact("none", rankOffersHeuristic(demand, offers), offers);
+    }
+    try {
+      const rawText = await callChatCompletionsRanking(log, correlationId, p, prompt);
+      const json = extractJsonValue(rawText);
+      const parsed = sanitizeRankingToCandidates(parseVendorRankingOutput(json), offers);
+      log.info("ranking_gmi_ok", { correlationId, model: p.model });
+      return toArtifact("gmi", parsed, offers);
+    } catch (e) {
+      log.error("ranking_gmi_failed", { correlationId, err: String(e) });
       return toArtifact("none", rankOffersHeuristic(demand, offers), offers);
     }
   }

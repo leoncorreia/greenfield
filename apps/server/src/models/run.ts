@@ -15,7 +15,7 @@ export const normalizedOfferSchema = z.object({
 export type NormalizedOffer = z.infer<typeof normalizedOfferSchema>;
 
 export type VendorRankingArtifact = {
-  provider: "none" | "openai" | "bedrock";
+  provider: "none" | "openai" | "bedrock" | "gmi";
   rankedVendorIds: string[];
   rationale: string;
   anomalies?: string[];

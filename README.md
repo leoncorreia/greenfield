@@ -8,7 +8,7 @@ Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → so
 |------------|----------------|
 | Candidate store, negotiation transcript, order state, idempotency | **Redis** (ioredis) |
 | Discovery extraction | **Mock vendor JSON** by default; optional fetch + extract pipeline with robots.txt + rate limits when `WEB_DISCOVERY_ENABLED=true` |
-| Vendor ranking (Milestone 4) | **OpenAI-compatible** JSON (`LLM_PROVIDER=openai`) or **AWS Bedrock** Converse (`LLM_PROVIDER=bedrock`); **`none`** = deterministic heuristic |
+| Vendor ranking (Milestone 4) | **OpenAI** (`openai`), **GMI Cloud** (`gmi`), **Bedrock** (`bedrock`), or **`none`** (heuristic) |
 | Optional normalization | **Nexla** — passthrough + logs if keys absent |
 | Optional persistence of research artifacts | **Ghost** / **TigerData** — skipped if unset |
 | Payment attempts | **x402**, **CDP**, **MPP**, **agentic.market** — env-driven HTTP stubs in `payments.ts` |
@@ -32,8 +32,22 @@ Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → so
 cp .env.example .env
 docker compose up -d redis
 npm install
+npm run dev
+```
+
+- **UI + API:** [http://127.0.0.1:5173](http://127.0.0.1:5173) (Vite proxies `/api` → server on port **8080**).
+- **API only:** `npm run dev:server` then `GET http://127.0.0.1:8080/health`.
+
+**One process / one URL (optional):** build the web app, then point the server at the dist folder:
+
+```bash
+npm run build -w apps/web
+# in .env for the server:
+STATIC_WEB_ROOT=apps/web/dist
 npm run dev:server
 ```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080) — the same server serves the SPA and the REST API.
 
 Health: `GET http://127.0.0.1:8080/health`
 
@@ -59,7 +73,8 @@ Mock vendor quotes (same server):
 | `LLM_PROVIDER` | Behavior |
 |----------------|----------|
 | `none` | Heuristic rank (price, MOQ vs units, lead time, cap violations) — no network |
-| `openai` | `POST …/chat/completions` with `response_format: json_object`; requires `OPENAI_API_KEY`. Optional `OPENAI_BASE_URL` for GMI / Azure OpenAI-style gateways |
+| `openai` | `POST …/chat/completions` with `response_format: json_object`; requires `OPENAI_API_KEY`. Optional `OPENAI_BASE_URL` (default `https://api.openai.com/v1`) |
+| `gmi` | **[GMI Cloud](https://docs.gmicloud.ai/inference-engine/api-reference/llm-api-reference)** Inference Engine — OpenAI-compatible `POST /v1/chat/completions`. Set **`GMI_API_KEY`** and **`GMI_MODEL`** (e.g. a model id from GMI’s catalog). Optional **`GMI_BASE_URL`** (default `https://api.gmi-serving.com/v1`). You may reuse **`OPENAI_API_KEY`** / **`OPENAI_BASE_URL`** / **`OPENAI_MODEL`** instead if you prefer one shared `.env` layout. |
 | `bedrock` | AWS **Converse** API via `@aws-sdk/client-bedrock-runtime`; requires `AWS_REGION`, `AWS_BEDROCK_MODEL_ID`, and credentials (e.g. `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or instance role) |
 
 Invalid LLM JSON or HTTP errors **fall back** to the heuristic rank and log the error.
@@ -74,7 +89,7 @@ See [`.env.example`](./.env.example). Highlights:
 | `PUBLIC_BASE_URL` | Base URL for discovery to call `/mock/vendor-*`. On Render, if unset, the server falls back to **`RENDER_EXTERNAL_URL`** (injected by Render) |
 | `CITED_MD_PATH` | Where audit markdown is appended |
 | `WEB_DISCOVERY_*` | Bounded public discovery when enabled |
-| `LLM_PROVIDER`, `OPENAI_*`, `AWS_*` | Ranking (Milestone 4) |
+| `LLM_PROVIDER`, `OPENAI_*`, `GMI_*`, `AWS_*` | Ranking (Milestone 4) |
 | `VITE_API_ORIGIN` | Web production build: origin of the API (no trailing slash), e.g. `https://greenfield-vendor-api.onrender.com` |
 | `X402_ENDPOINT`, `CDP_ENDPOINT`, … | Payment stub POST targets when set |
 
@@ -97,7 +112,7 @@ Deploy steps:
 3. **`PUBLIC_BASE_URL`** is optional: on Render the server defaults to **`RENDER_EXTERNAL_URL`** when `PUBLIC_BASE_URL` is unset, so mock discovery can call the same host without extra configuration.
 4. **Other integrations** are not part of the Blueprint file on purpose (so you are not prompted for dozens of keys). Add them in the Web Service → **Environment** when you need them — see [Optional integrations on Render](#optional-integrations-on-render) below.
 
-**Build / start** (from repo root, per `render.yaml`): `npm ci && npm run build -w apps/server` then `npm run start -w apps/server`. Health checks use `GET /health`.
+**Build / start** (from repo root, per `render.yaml`): `npm ci`, build **server + web**, then `npm run start -w apps/server`. **`STATIC_WEB_ROOT=apps/web/dist`** serves the demo UI from the same URL as the API. Health checks use `GET /health`.
 
 ### Optional integrations on Render
 
@@ -106,7 +121,7 @@ The Blueprint screen only reflects what is **in `render.yaml`** (Key Value + API
 | Area | Role | Environment variables |
 |------|------|-------------------------|
 | **Open web discovery** (“Tinyfish-style” pipeline in code: fetch, robots.txt, rate limits — not a separate vendor SDK) | Optional public sourcing | `WEB_DISCOVERY_ENABLED=true`, `WEB_DISCOVERY_SEED_URLS`, `WEB_DISCOVERY_MAX_PAGES`, `WEB_DISCOVERY_RATE_MS` |
-| **LLM ranking** | OpenAI-compatible or Bedrock | `LLM_PROVIDER` (`openai` \| `bedrock`), `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `AWS_REGION`, `AWS_BEDROCK_MODEL_ID`, plus AWS credentials for Bedrock |
+| **LLM ranking** | OpenAI, GMI Cloud, or Bedrock | `LLM_PROVIDER` (`openai` \| `gmi` \| `bedrock`), `OPENAI_*`, **`GMI_API_KEY`**, **`GMI_MODEL`**, optional `GMI_BASE_URL`, `AWS_*` + AWS credentials for Bedrock |
 | **Nexla** | Optional payload normalization | `NEXLA_API_KEY`, `NEXLA_BASE_URL` |
 | **Ghost** | Optional research artifacts | `GHOST_ADMIN_API_KEY`, `GHOST_CONTENT_API_URL` |
 | **TigerData** | Optional SQL persistence | `TIGERDATA_DATABASE_URL` |
@@ -127,8 +142,8 @@ With **`LLM_PROVIDER=none`** (the Blueprint default), you do **not** need OpenAI
 
 ## Demo script (~3 minutes) — full product
 
-1. Start Redis + `npm run dev` (server + web).
-2. Open the web UI; create a demand (N units, SKU, budget, date).
+1. Start Redis + `npm run dev`, then open **http://127.0.0.1:5173** (or use `STATIC_WEB_ROOT` + **http://127.0.0.1:8080**).
+2. In the web UI: create a demand (N units, SKU, budget, date).
 3. Start run — watch **Sourcing** → **Shortlisted**; expand **Ranking** (heuristic or LLM per env).
 4. Open **cited.md** via **GET /reports/latest** — sourcing + ranking sections with URLs / excerpts.
 5. *(Later)* Negotiation transcript, selection, payment stub logs.
