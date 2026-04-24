@@ -44,6 +44,10 @@ const envSchema = z.object({
   MPP_ENDPOINT: z.string().optional(),
   AGENTIC_MARKET_ENDPOINT: z.string().optional(),
 
+  NEGOTIATION_MAX_ROUNDS: z.coerce.number().int().min(1).max(5).default(5),
+  /** Escalate fulfillment when delay count exceeds this (e.g. 3 means 4+ delays escalate). */
+  FULFILLMENT_ESCALATE_AFTER_DELAYS: z.coerce.number().int().min(1).max(20).default(3),
+
   RUN_INTEGRATION_TESTS: z
     .string()
     .optional()

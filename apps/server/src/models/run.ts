@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PaymentAttempt } from "../payments.js";
 import type { RunState } from "../state-machine.js";
 
 export const normalizedOfferSchema = z.object({
@@ -22,9 +23,43 @@ export type VendorRankingArtifact = {
   citedHighlights: { vendorId: string; excerpt: string; sourceUrl: string }[];
 };
 
+export type NegotiationRoundEntry = {
+  round: number;
+  fromVendorId: string;
+  toVendorId: string;
+  message: string;
+  simulation: true;
+};
+
+export type NegotiationArtifact = {
+  rounds: NegotiationRoundEntry[];
+  maxRounds: number;
+  selectedVendorId: string;
+  summary: string;
+};
+
+export type PaymentArtifact = {
+  attempts: PaymentAttempt[];
+  orderId: string;
+  amount: number;
+  currency: string;
+};
+
+export type FulfillmentPhase = "PREPARING" | "IN_TRANSIT" | "OUT_FOR_DELIVERY" | "DELIVERED";
+
+export type FulfillmentArtifact = {
+  phase: FulfillmentPhase;
+  delayCount: number;
+  simulation: true;
+  events: { at: string; note: string }[];
+};
+
 export type RunArtifacts = {
   candidates: NormalizedOffer[];
   ranking?: VendorRankingArtifact;
+  negotiation?: NegotiationArtifact;
+  payment?: PaymentArtifact;
+  fulfillment?: FulfillmentArtifact;
   lastSourcingNote?: string;
 };
 

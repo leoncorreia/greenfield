@@ -47,6 +47,8 @@ const baseConfig = {
   CDP_ENDPOINT: undefined,
   MPP_ENDPOINT: undefined,
   AGENTIC_MARKET_ENDPOINT: undefined,
+  NEGOTIATION_MAX_ROUNDS: 5,
+  FULFILLMENT_ESCALATE_AFTER_DELAYS: 3,
   RUN_INTEGRATION_TESTS: false,
 } satisfies Config;
 

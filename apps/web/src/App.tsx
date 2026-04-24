@@ -31,6 +31,7 @@ type Run = {
   demandId: string;
   artifacts: {
     candidates: Array<{
+      vendorId?: string;
       vendorName: string;
       pricePerUnit: number;
       moq: number;
@@ -45,6 +46,24 @@ type Run = {
       rationale: string;
       anomalies?: string[];
       citedHighlights: Array<{ vendorId: string; excerpt: string; sourceUrl: string }>;
+    };
+    negotiation?: {
+      rounds: Array<{ round: number; fromVendorId: string; toVendorId: string; message: string }>;
+      maxRounds: number;
+      selectedVendorId: string;
+      summary: string;
+    };
+    payment?: {
+      orderId: string;
+      amount: number;
+      currency: string;
+      attempts: Array<{ provider: string; orderId: string; status: string; detail?: string }>;
+    };
+    fulfillment?: {
+      phase: string;
+      delayCount: number;
+      simulation?: boolean;
+      events: Array<{ at: string; note: string }>;
     };
   };
 };
@@ -99,6 +118,9 @@ export function App() {
       : -1;
   const escalated = run?.state === "ESCALATED";
   const completed = run?.state === "COMPLETED";
+  const closingLoop =
+    run &&
+    ["SOURCING", "SHORTLISTED", "NEGOTIATING", "SELECTED", "PAYMENT_SUBMITTED"].includes(run.state);
 
   async function createDemand() {
     setError(null);
@@ -147,13 +169,38 @@ export function App() {
     }
   }
 
+  async function advanceShipment(kind: "progress" | "delay") {
+    if (!run) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api("/demo/advance-shipment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId: run.id, kind }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string; run?: Run };
+      if (!r.ok) {
+        throw new Error(j.error ?? r.statusText);
+      }
+      if (j.run) setRun(j.run);
+      else await refreshRun(run.id);
+      await refreshCited();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main>
       <header className="hero">
         <h1>Vendor Ops — demo UI</h1>
         <p className="hero-sub">
-          <span className="sim">SIMULATION</span> In-repo mock vendors; negotiation and payments are not live. Open web
-          discovery is optional and bounded by config.
+          <span className="sim">SIMULATION</span> In-repo mock vendors; after ranking the server runs in-process negotiation
+          and payment <strong>stubs</strong>, then fulfillment tracking. Use <strong>Advance shipment</strong> below to
+          simulate carrier progress or delays. Open web discovery is optional and bounded by config.
         </p>
         <p className="kbd-line">
           <strong>How to demo (local):</strong> <kbd>docker compose up -d redis</kbd> → <kbd>cp .env.example .env</kbd> →{" "}
@@ -219,14 +266,17 @@ export function App() {
             )}
           </div>
 
-          {run.state === "SOURCING" && (
+          {(run.state === "SOURCING" || closingLoop) && (
             <p className="pulse">
-              <strong>Sourcing…</strong> polling every 1.5s (async worker).
+              <strong>
+                {run.state === "SOURCING" ? "Sourcing…" : "Negotiation → payment → fulfillment (SIMULATION)…"}
+              </strong>{" "}
+              polling every 1.5s.
             </p>
           )}
 
           <button type="button" disabled={busy || run.state !== "DEMAND_RECEIVED"} onClick={() => void startRun()}>
-            Start run (sourcing + ranking)
+            Start run (sourcing through fulfillment tracking)
           </button>
 
           <h3>Candidates</h3>
@@ -258,6 +308,79 @@ export function App() {
                 <pre>Anomalies:{"\n"}{run.artifacts.ranking.anomalies.join("\n")}</pre>
               )}
             </>
+          )}
+
+          {run.artifacts.negotiation && (
+            <>
+              <h3>Negotiation (SIMULATION)</h3>
+              <p>
+                <strong>Selected:</strong> <code>{run.artifacts.negotiation.selectedVendorId}</code>
+              </p>
+              <pre>{run.artifacts.negotiation.summary}</pre>
+              {run.artifacts.negotiation.rounds.length > 0 && (
+                <ol className="cand-list">
+                  {run.artifacts.negotiation.rounds.map((r) => (
+                    <li key={r.round}>
+                      <strong>Round {r.round}</strong> ({r.fromVendorId} → {r.toVendorId}): {r.message}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
+          )}
+
+          {run.artifacts.payment && (
+            <>
+              <h3>Payment stubs</h3>
+              <p>
+                Order <code>{run.artifacts.payment.orderId}</code> ·{" "}
+                <strong>
+                  {run.artifacts.payment.amount} {run.artifacts.payment.currency}
+                </strong>
+              </p>
+              <ul className="cand-list">
+                {run.artifacts.payment.attempts.map((a) => (
+                  <li key={a.provider}>
+                    <strong>{a.provider}</strong>: {a.status}
+                    {a.detail ? ` — ${a.detail}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {run.artifacts.fulfillment && (
+            <>
+              <h3>Fulfillment (SIMULATION)</h3>
+              <p>
+                Phase <strong>{run.artifacts.fulfillment.phase}</strong>, delays recorded:{" "}
+                <strong>{run.artifacts.fulfillment.delayCount}</strong>
+              </p>
+              <ul className="cand-list">
+                {run.artifacts.fulfillment.events.map((e, i) => (
+                  <li key={`${e.at}-${i}`}>
+                    <time>{e.at}</time>: {e.note}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {run.state === "FULFILLMENT_TRACKING" && (
+            <div className="subblock">
+              <h3>Advance shipment</h3>
+              <p className="muted">
+                Calls <code>POST /demo/advance-shipment</code>. Progress moves PREPARING → … → DELIVERED; another
+                progress completes the run. Delay increments a counter; too many delays escalate the run (per server
+                config).
+              </p>
+              <button type="button" disabled={busy} onClick={() => void advanceShipment("progress")}>
+                Progress
+              </button>{" "}
+              <button type="button" disabled={busy} onClick={() => void advanceShipment("delay")}>
+                Delay
+              </button>
+            </div>
           )}
         </div>
       )}

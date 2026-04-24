@@ -2,7 +2,12 @@ import { appendFile, mkdir } from "fs/promises";
 import { dirname } from "path";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
-import type { RunRecord, VendorRankingArtifact } from "../models/run.js";
+import type {
+  NegotiationArtifact,
+  PaymentArtifact,
+  RunRecord,
+  VendorRankingArtifact,
+} from "../models/run.js";
 
 export type CitedSection = {
   title: string;
@@ -87,6 +92,49 @@ export function buildSourcingCited(run: RunRecord, note: string): CitedSection {
 
 function internalRunRef(run: RunRecord): string {
   return `internal://run/${run.id}/sourcing`;
+}
+
+export function buildNegotiationCited(run: RunRecord, n: NegotiationArtifact): CitedSection {
+  const sources = n.rounds.map((r) => ({
+    url: `internal://negotiation/${run.id}/round-${r.round}`,
+    excerpt: r.message,
+  }));
+  return {
+    title: `Negotiation complete (SIMULATION) — ${run.id}`,
+    runId: run.id,
+    correlationId: run.correlationId,
+    phase: "SELECTED",
+    decision: `${n.summary}\n\n**Selected vendorId:** \`${n.selectedVendorId}\``,
+    sources: sources.length
+      ? sources
+      : [{ url: internalRunRef(run), excerpt: "Single-vendor path; no multi-party rounds." }],
+  };
+}
+
+export function buildPaymentCited(run: RunRecord, p: PaymentArtifact): CitedSection {
+  const lines = p.attempts.map((a) => `- **${a.provider}**: ${a.status}${a.detail ? ` — ${a.detail}` : ""}`).join("\n");
+  return {
+    title: `Payment rail attempts — ${run.id}`,
+    runId: run.id,
+    correlationId: run.correlationId,
+    phase: "PAYMENT_SUBMITTED",
+    decision: `Order \`${p.orderId}\` · amount **${p.amount} ${p.currency}** (stub rails; no real settlement).\n\n${lines}`,
+    sources: [{ url: `internal://payment/${p.orderId}`, excerpt: "Env-driven POST stubs only." }],
+  };
+}
+
+export function buildFulfillmentInitCited(run: RunRecord): CitedSection {
+  const f = run.artifacts.fulfillment;
+  const excerpt = f ? `phase=${f.phase}, delays=${f.delayCount}` : "fulfillment artifact missing";
+  return {
+    title: `Fulfillment tracking started (SIMULATION) — ${run.id}`,
+    runId: run.id,
+    correlationId: run.correlationId,
+    phase: "FULFILLMENT_TRACKING",
+    decision:
+      "Carrier + tracking are **SIMULATION**. Use `POST /demo/advance-shipment` with `{ \"runId\", \"kind\": \"progress\" | \"delay\" }` to move the story.",
+    sources: [{ url: `internal://fulfillment/${run.id}`, excerpt }],
+  };
 }
 
 export function buildRankingCited(run: RunRecord, ranking: VendorRankingArtifact): CitedSection {

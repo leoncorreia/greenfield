@@ -93,3 +93,9 @@ services:
         value: ""
       - key: AGENTIC_MARKET_ENDPOINT
         value: ""
+
+      # --- Negotiation / fulfillment simulation (orchestrator + POST /demo/advance-shipment) ---
+      - key: NEGOTIATION_MAX_ROUNDS
+        value: "5"
+      - key: FULFILLMENT_ESCALATE_AFTER_DELAYS
+        value: "3"

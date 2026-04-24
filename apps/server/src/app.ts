@@ -11,6 +11,7 @@ import { createDemandRouter } from "./routes/demand.js";
 import { createRunsRouter } from "./routes/runs.js";
 import { createReportsRouter } from "./routes/reports.js";
 import { createPaymentsRouter } from "./routes/payments.js";
+import { createDemoRouter } from "./routes/demo.js";
 import type { OrchestratorDeps } from "./services/orchestrator.js";
 
 /**
@@ -63,6 +64,7 @@ export function createApp(config: Config, log: Logger, redis: RedisClient, orche
   app.use("/runs", createRunsRouter(config, log, redis, orchestratorDeps));
   app.use("/reports", createReportsRouter(config, log));
   app.use("/payments", createPaymentsRouter(config, log, redis));
+  app.use("/demo", createDemoRouter(config, log, redis));
 
   const staticRoot = resolveStaticWebRoot(config, log);
   if (staticRoot) {

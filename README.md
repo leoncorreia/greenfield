@@ -1,6 +1,8 @@
 # Greenfield — Autonomous Vendor Ops Agent
 
-Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → sourcing → shortlist → (later) negotiate → pay → fulfill, with **simulated** negotiation/fulfillment where real outreach would be unsafe, and **optional** open-web discovery behind `WEB_DISCOVERY_ENABLED`.
+**Hackathon submission checklist:** see [`SUBMISSION.md`](./SUBMISSION.md) (criteria mapping, 3-minute demo script, Senso / Shipables links).
+
+Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → sourcing → shortlist → **negotiate → pay → fulfill** (all **simulated** after ranking: in-process negotiation, env-driven payment stubs, carrier phases advanced via `POST /demo/advance-shipment`), plus **optional** open-web discovery behind `WEB_DISCOVERY_ENABLED`.
 
 ## Sponsor story (tool mapping)
 
@@ -18,7 +20,7 @@ Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → so
 
 `DEMAND_RECEIVED` → `SOURCING` → `SHORTLISTED` → `NEGOTIATING` → `SELECTED` → `PAYMENT_SUBMITTED` → `FULFILLMENT_TRACKING` → `COMPLETED` \| `ESCALATED`
 
-**Milestone 4 (done):** After `SHORTLISTED`, the server runs **vendor ranking** (`rankVendorOffers` in `apps/server/src/llm/ranking.ts`): structured JSON validated with **Zod** (`vendorRankingOutputSchema`), persisted on `run.artifacts.ranking`, and a **Ranking** section appended to `cited.md` (`buildRankingCited`). Negotiation / payments / fulfillment remain future milestones.
+After `SHORTLISTED`, the server runs **vendor ranking** (`rankVendorOffers` in `apps/server/src/llm/ranking.ts`), then automatically continues **negotiation** (`simulateNegotiation` in `apps/server/src/services/negotiation.ts`, transcript in Redis), **selection**, **payment stubs** (`attemptPaymentRails` in `apps/server/src/payments.ts`), and **fulfillment tracking** (`apps/server/src/services/fulfillment.ts`). Each step appends to `cited.md`. Use **`POST /demo/advance-shipment`** with `{ "runId", "kind": "progress" | "delay" }` to simulate carrier movement or delays until `COMPLETED` or `ESCALATED`.
 
 ### Production today vs roadmap
 
@@ -29,10 +31,10 @@ Hackathon-grade monorepo demonstrating a **closed economic loop**: demand → so
 | Nexla / Ghost / TigerData hooks | **Wired** (no-op or stub logs when env empty) |
 | LLM ranking (OpenAI / **GMI** / Bedrock / heuristic) | **Shipped** |
 | `cited.md` + `GET /reports/latest` | **Shipped** |
-| Payment module (`payments.ts`) + `POST /payments/simulate` (dev only) | **Stubs exist**; **not** auto-run after ranking in production |
-| Negotiation transcript, vendor selection, pay → fulfill, escalation timer | **Not implemented** yet (state machine enums exist; orchestrator stops after ranking) |
+| Payment module (`payments.ts`) + `POST /payments/simulate` (dev only) | **Stubs**; **also** invoked from orchestrator after selection (`order:{runId}`) |
+| Negotiation (SIMULATION), selection, pay → fulfill, delay escalation | **Shipped** — orchestrator through `FULFILLMENT_TRACKING`; UI + `POST /demo/advance-shipment` for carrier simulation |
 
-So in production **right now** you get a real **demand → sourcing → shortlist → rank → audit** loop with UI and Redis. You do **not** yet get the full negotiate → pay → fulfill agent without more engineering.
+In production you get the full **demand → sourcing → shortlist → rank → negotiate → pay → fulfill (simulated)** path in one **Start run** action, then you drive delivery with **`POST /demo/advance-shipment`** (or the buttons in the demo UI when the run is in fulfillment).
 
 ## Prerequisites
 
