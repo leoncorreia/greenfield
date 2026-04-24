@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import { readLatestCited } from "../services/cited.js";
@@ -6,7 +6,7 @@ import { readLatestCited } from "../services/cited.js";
 export function createReportsRouter(config: Config, log: Logger) {
   const r = Router();
 
-  r.get("/latest", async (_req, res) => {
+  r.get("/latest", async (_req: Request, res: Response) => {
     try {
       const cited = await readLatestCited(config);
       res.json({

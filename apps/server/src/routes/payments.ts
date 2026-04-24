@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { RedisClient } from "../redis/client.js";
@@ -7,7 +7,7 @@ import { attemptPaymentRails } from "../payments.js";
 export function createPaymentsRouter(config: Config, log: Logger, redis: RedisClient) {
   const r = Router();
 
-  r.post("/simulate", async (req, res) => {
+  r.post("/simulate", async (req: Request, res: Response) => {
     if (config.NODE_ENV !== "development") {
       res.status(403).json({ error: "forbidden_outside_development" });
       return;

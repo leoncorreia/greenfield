@@ -1,9 +1,15 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { RedisClient } from "../redis/client.js";
 import * as runsRepo from "../repos/runs.js";
 import { startSourcingPipeline, type OrchestratorDeps } from "../services/orchestrator.js";
+
+function paramId(req: Request): string | undefined {
+  const raw = req.params.id;
+  const id = Array.isArray(raw) ? raw[0] : raw;
+  return id ?? undefined;
+}
 
 export function createRunsRouter(
   _config: Config,
@@ -13,8 +19,12 @@ export function createRunsRouter(
 ) {
   const r = Router();
 
-  r.post("/:id/start", async (req, res) => {
-    const { id } = req.params;
+  r.post("/:id/start", async (req: Request, res: Response) => {
+    const id = paramId(req);
+    if (!id) {
+      res.status(400).json({ error: "missing_run_id" });
+      return;
+    }
     const run = await runsRepo.getRun(redis, id);
     if (!run) {
       res.status(404).json({ error: "run_not_found" });
@@ -33,8 +43,13 @@ export function createRunsRouter(
     });
   });
 
-  r.get("/:id", async (req, res) => {
-    const run = await runsRepo.getRun(redis, req.params.id);
+  r.get("/:id", async (req: Request, res: Response) => {
+    const id = paramId(req);
+    if (!id) {
+      res.status(400).json({ error: "missing_run_id" });
+      return;
+    }
+    const run = await runsRepo.getRun(redis, id);
     if (!run) {
       res.status(404).json({ error: "run_not_found" });
       return;

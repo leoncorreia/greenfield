@@ -1,5 +1,5 @@
-import { appendFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { appendFile, mkdir } from "fs/promises";
+import { dirname } from "path";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { RunRecord, VendorRankingArtifact } from "../models/run.js";
@@ -52,7 +52,7 @@ export async function appendCited(
 }
 
 export async function readLatestCited(config: Config): Promise<{ path: string; text: string; updatedHint: string }> {
-  const { readFile, stat } = await import("node:fs/promises");
+  const { readFile, stat } = await import("fs/promises");
   const path = config.CITED_MD_PATH;
   try {
     const [text, st] = await Promise.all([readFile(path, "utf8"), stat(path)]);

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import type { Config } from "../config.js";
 import type { Logger } from "../logger.js";
 import { demandSchema } from "../models/demand.js";
@@ -16,7 +16,7 @@ export function createDemandRouter(
 ) {
   const r = Router();
 
-  r.post("/", async (req, res) => {
+  r.post("/", async (req: Request, res: Response) => {
     const parsed = demandSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "invalid_demand", details: parsed.error.flatten() });

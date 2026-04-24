@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createServer } from "node:http";
+import { createServer } from "http";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { createRedis, pingRedis } from "./redis/client.js";

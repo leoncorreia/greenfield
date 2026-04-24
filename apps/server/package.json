@@ -18,15 +18,15 @@
     "express": "^4.21.2",
     "ioredis": "^5.4.2",
     "nanoid": "^5.0.9",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
+    "zod": "^3.24.2",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  },
+  "devDependencies": {
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
   "engines": {
