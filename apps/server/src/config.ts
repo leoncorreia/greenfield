@@ -53,7 +53,13 @@ const envSchema = z.object({
 export type Config = z.infer<typeof envSchema>;
 
 export function loadConfig(): Config {
-  const env = { ...process.env };
+  const env: Record<string, string | undefined> = { ...process.env };
+  for (const key of Object.keys(env)) {
+    const v = env[key];
+    if (v !== undefined && v.trim() === "") {
+      delete env[key];
+    }
+  }
   if (!env.PUBLIC_BASE_URL?.trim() && env.RENDER_EXTERNAL_URL?.trim()) {
     env.PUBLIC_BASE_URL = env.RENDER_EXTERNAL_URL.trim();
   }

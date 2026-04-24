@@ -1,9 +1,10 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
-# Provisions Redis-compatible Key Value and wires REDIS_URL automatically.
-# PUBLIC_BASE_URL: omit in Render; server uses RENDER_EXTERNAL_URL when unset.
 #
-# Optional integrations (Nexla, Ghost, TigerData, payment stubs, web discovery, LLM)
-# are not listed here — add them in the Render dashboard when you need them (see README).
+# All integration knobs are declared below so they show up in the Render dashboard.
+# "Tinyfish" in the product brief = open-web discovery here → WEB_DISCOVERY_* (no separate Tinyfish env).
+#
+# REDIS_URL + NODE_ENV + STATIC_WEB_ROOT: required wiring.
+# Secrets (API keys): set values in Dashboard → Environment (never commit real keys).
 
 services:
   - type: keyvalue
@@ -18,7 +19,6 @@ services:
     region: oregon
     plan: free
     rootDir: .
-    # Service env sets NODE_ENV=production, which makes npm ci omit devDependencies — vite must be installed to build the UI.
     buildCommand: NPM_CONFIG_PRODUCTION=false NODE_ENV=development npm ci && npm run build -w apps/server && npm run build -w apps/web
     startCommand: npm run start -w apps/server
     healthCheckPath: /health
@@ -27,10 +27,69 @@ services:
         value: production
       - key: STATIC_WEB_ROOT
         value: apps/web/dist
-      - key: LLM_PROVIDER
-        value: none
+      - key: LOG_LEVEL
+        value: info
+      - key: CITED_MD_PATH
+        value: ./cited.md
+      - key: AUTO_START_RUN
+        value: "false"
+      - key: RUN_INTEGRATION_TESTS
+        value: "false"
+
       - key: REDIS_URL
         fromService:
           name: greenfield-keyvalue
           type: keyvalue
           property: connectionString
+
+      # --- Open web discovery (brief “Tinyfish-style”: fetch + robots.txt + rate limits) ---
+      - key: WEB_DISCOVERY_ENABLED
+        value: "false"
+      - key: WEB_DISCOVERY_MAX_PAGES
+        value: "10"
+      - key: WEB_DISCOVERY_RATE_MS
+        value: "750"
+      - key: WEB_DISCOVERY_SEED_URLS
+        value: ""
+
+      # --- LLM ranking (set provider + keys in dashboard for live LLM rank) ---
+      - key: LLM_PROVIDER
+        value: none
+      - key: OPENAI_BASE_URL
+        value: ""
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: GMI_API_KEY
+        value: ""
+      - key: GMI_BASE_URL
+        value: ""
+      - key: GMI_MODEL
+        value: ""
+      - key: AWS_REGION
+        value: ""
+      - key: AWS_BEDROCK_MODEL_ID
+        value: ""
+
+      # --- Optional sponsor-style integrations (no-op when empty) ---
+      - key: NEXLA_API_KEY
+        value: ""
+      - key: NEXLA_BASE_URL
+        value: ""
+      - key: GHOST_ADMIN_API_KEY
+        value: ""
+      - key: GHOST_CONTENT_API_URL
+        value: ""
+      - key: TIGERDATA_DATABASE_URL
+        value: ""
+
+      # --- Payment rail stubs (HTTP POST when URL set) ---
+      - key: X402_ENDPOINT
+        value: ""
+      - key: CDP_ENDPOINT
+        value: ""
+      - key: MPP_ENDPOINT
+        value: ""
+      - key: AGENTIC_MARKET_ENDPOINT
+        value: ""
