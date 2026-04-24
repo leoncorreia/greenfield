@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import cors from "cors";
 import express from "express";
 import type { Config } from "./config.js";
@@ -11,6 +12,38 @@ import { createRunsRouter } from "./routes/runs.js";
 import { createReportsRouter } from "./routes/reports.js";
 import { createPaymentsRouter } from "./routes/payments.js";
 import type { OrchestratorDeps } from "./services/orchestrator.js";
+
+/**
+ * Monorepo root: this file lives at `apps/server/dist/*.js` (prod) or `apps/server/src/*.ts` (tsx dev).
+ * Render/npm workspaces often set `process.cwd()` to `apps/server`, so never resolve STATIC_WEB_ROOT from cwd alone.
+ */
+function resolveMonorepoRoot(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(moduleDir, "..", "..", "..");
+}
+
+function resolveStaticWebRoot(config: Config, log: Logger): string | undefined {
+  const raw = config.STATIC_WEB_ROOT?.trim();
+  if (!raw) return undefined;
+  if (path.isAbsolute(raw)) {
+    if (!existsSync(raw)) {
+      log.warn("static_web_path_missing", { configured: raw, resolved: raw });
+      return undefined;
+    }
+    return raw;
+  }
+  const resolved = path.resolve(resolveMonorepoRoot(), raw);
+  if (!existsSync(resolved)) {
+    log.warn("static_web_path_missing", {
+      configured: raw,
+      resolved,
+      cwd: process.cwd(),
+      hint: "Expected built UI at apps/web/dist from repo root",
+    });
+    return undefined;
+  }
+  return resolved;
+}
 
 export function createApp(config: Config, log: Logger, redis: RedisClient, orchestratorDeps: OrchestratorDeps) {
   const app = express();
@@ -31,10 +64,8 @@ export function createApp(config: Config, log: Logger, redis: RedisClient, orche
   app.use("/reports", createReportsRouter(config, log));
   app.use("/payments", createPaymentsRouter(config, log, redis));
 
-  const staticRoot = config.STATIC_WEB_ROOT?.trim()
-    ? path.resolve(process.cwd(), config.STATIC_WEB_ROOT.trim())
-    : undefined;
-  if (staticRoot && existsSync(staticRoot)) {
+  const staticRoot = resolveStaticWebRoot(config, log);
+  if (staticRoot) {
     log.info("static_web_enabled", { staticRoot });
     app.use(express.static(staticRoot, { index: ["index.html"] }));
     app.get("/*", (req, res, next) => {
